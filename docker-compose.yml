@@ -1,0 +1,193 @@
+name: release-orchestrator
+
+# Unified stack for the Release Orchestrator platform.
+# Boots the full sample-app: frontend, api-gateway, and all four
+# microservices with their own PostgreSQL databases.
+#
+#   docker compose up --build
+#
+# Endpoints (host):
+#   - frontend UI        http://localhost:5173
+#   - api gateway        http://localhost:8080
+#   - user-db            localhost:5432
+#   - order-db           localhost:5434
+#   - payment-db         localhost:5433
+#   - auth-db            localhost:5435
+
+services:
+  # --- user-service -------------------------------------------------
+  user-service:
+    build: ./user-service
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      DB_HOST: user-db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: user_db
+    depends_on:
+      user-db:
+        condition: service_healthy
+
+  user-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d user_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- order-service ------------------------------------------------
+  order-service:
+    build: ./order-service
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      DB_HOST: order-db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: order_db
+      USER_SERVICE_URL: "http://user-service:8080"
+      PAYMENT_SERVICE_URL: "http://payment-service:8080"
+    depends_on:
+      order-db:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+
+  order-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - order-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- payment-service ----------------------------------------------
+  payment-service:
+    build: ./payment-service
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      DB_HOST: payment-db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: payment_db
+    depends_on:
+      payment-db:
+        condition: service_healthy
+
+  payment-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - payment-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- auth-service -------------------------------------------------
+  auth-service:
+    build: ./auth-service
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      DB_HOST: auth-db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: postgres
+      DB_NAME: auth_db
+      JWT_SECRET: "${JWT_SECRET:-dev-jwt-secret-change-me}"
+      JWT_EXPIRY: "${JWT_EXPIRY:-60m}"
+      USER_SERVICE_URL: "http://user-service:8080"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+
+  auth-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- api-gateway --------------------------------------------------
+  api-gateway:
+    build: ./api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      USER_SERVICE_URL: "http://user-service:8080"
+      ORDER_SERVICE_URL: "http://order-service:8080"
+      PAYMENT_SERVICE_URL: "http://payment-service:8080"
+      AUTH_SERVICE_URL: "http://auth-service:8080"
+    depends_on:
+      user-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      auth-service:
+        condition: service_started
+
+  # --- frontend -----------------------------------------------------
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    environment:
+      API_GATEWAY_URL: "http://api-gateway:8080"
+    depends_on:
+      api-gateway:
+        condition: service_started
+
+volumes:
+  user-db-data:
+  order-db-data:
+  payment-db-data:
+  auth-db-data:

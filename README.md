@@ -63,6 +63,28 @@ docker compose up --build
 - API gateway: http://localhost:8080
 - Health check: http://localhost:8080/health
 
+## Kubernetes manifests (GitOps)
+
+`k8s-manifests/` holds the GitOps source of truth for Kubernetes deployments,
+one folder per service using a Kustomize base + overlays layout:
+
+```
+k8s-manifests/
+└── <service>/
+    ├── base/                    # canonical Deployment + Service (+ ConfigMap for frontend)
+    │   ├── kustomization.yaml   # declares the GHCR image to patch
+    │   ├── deployment.yaml
+    │   └── service.yaml
+    └── overlays/
+        ├── staging/             # 1 replica
+        └── production/          # 3 replicas
+```
+
+Each base declares its image as
+`ghcr.io/release-orchestrator/<service>`; the tag is bumped by each service's
+CI `release` job on git tag via `kustomize edit set image` and committed back
+to this repo. Staging auto-syncs, production requires manual approval (ArgoCD).
+
 ## Repositories
 
 - [frontend](https://github.com/Release-Orchestrator/frontend)

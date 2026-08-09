@@ -1,8 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - deployment.yaml
-  - service.yaml
+- deployment.yaml
+- service.yaml
 images:
-  - name: ghcr.io/release-orchestrator/payment-service
-    newTag: latest
+- name: ghcr.io/release-orchestrator/payment-service
+  newName: ghcr.io/release-orchestrator/payment-service
+  newTag: v1.1

@@ -5,4 +5,4 @@ metadata:
   labels:
     app: frontend
 data:
-  API_GATEWAY_URL: http://api-gateway:8080
+  API_GATEWAY_URL: http://api-gateway:80

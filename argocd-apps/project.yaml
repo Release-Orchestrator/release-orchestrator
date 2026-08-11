@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: release-platform
+  namespace: argocd
+spec:
+  description: Release Orchestrator platform applications
+  sourceRepos:
+    - https://github.com/Release-Orchestrator/release-orchestrator
+  destinations:
+    - namespace: staging
+      server: https://kubernetes.default.svc
+    - namespace: production
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace

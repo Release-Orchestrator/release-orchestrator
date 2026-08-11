@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payment-service-production
+  namespace: argocd
+spec:
+  project: release-platform
+  source:
+    repoURL: https://github.com/Release-Orchestrator/release-orchestrator
+    targetRevision: main
+    path: k8s-manifests/payment-service/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

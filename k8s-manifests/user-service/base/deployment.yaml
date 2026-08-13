@@ -14,6 +14,8 @@ spec:
       labels:
         app: user-service
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: user-service
           image: ghcr.io/release-orchestrator/user-service:latest

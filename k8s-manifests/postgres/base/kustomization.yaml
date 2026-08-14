@@ -4,3 +4,5 @@ resources:
   - deployment.yaml
   - service.yaml
   - configmap.yaml
+  - pvc.yaml
+  - storageclass.yaml

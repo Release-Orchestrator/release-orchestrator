@@ -73,7 +73,7 @@ k8s-manifests/
 └── <service>/
     ├── base/                    # canonical Deployment + Service (+ ConfigMap for frontend)
     │   ├── kustomization.yaml   # declares the GHCR image to patch
-    │   ├── deployment.yaml
+    │   ├── deployment.yaml      # postgres uses statefulset.yaml (EBS PVC volumeClaimTemplate)
     │   └── service.yaml
     └── overlays/
         ├── staging/             # 1 replica

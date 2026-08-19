@@ -7,4 +7,4 @@ resources:
 images:
 - name: ghcr.io/release-orchestrator/frontend
   newName: ghcr.io/release-orchestrator/frontend
-  newTag: v1.1
+  newTag: v1.2

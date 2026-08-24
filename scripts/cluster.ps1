@@ -181,6 +181,28 @@ function Invoke-Create {
     & kubectl -n $ArgocdNamespace rollout status deployment/argocd-application-controller --timeout=300s
     Assert-NativeSuccess
 
+    Write-Step "Installing kube-prometheus-stack (Prometheus + Grafana + Alertmanager)"
+    $monArgs = @("upgrade", "--install", "monitoring", "prometheus-community/kube-prometheus-stack",
+        "--namespace", "monitoring", "--create-namespace",
+        "--set", "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false",
+        "--set", "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false",
+        "--set", "grafana.enabled=true",
+        "--set", "alertmanager.enabled=true",
+        "--set", "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName=gp3",
+        "--set", "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi",
+        "--set", "grafana.sidecar.dashboards.enabled=true",
+        "--set", "grafana.sidecar.dashboards.label=grafana_dashboard")
+    & helm @monArgs
+    Assert-NativeSuccess
+
+    Write-Step "Waiting for ArgoCD to be ready"
+    & kubectl -n $ArgocdNamespace rollout status deployment/argocd-server --timeout=300s
+    Assert-NativeSuccess
+    & kubectl -n $ArgocdNamespace rollout status deployment/argocd-repo-server --timeout=300s
+    Assert-NativeSuccess
+    & kubectl -n $ArgocdNamespace rollout status deployment/argocd-application-controller --timeout=300s
+    Assert-NativeSuccess
+
     Write-Step "Applying platform secrets (dev defaults)"
     New-Secret "user-service-secrets" "staging" @{ "database-url" = "postgres://postgres:$DbPassword@user-db:5432/user_db?sslmode=disable" }
     New-Secret "auth-service-secrets" "staging" @{ "jwt-secret" = $JwtSecret; "db-password" = $DbPassword }

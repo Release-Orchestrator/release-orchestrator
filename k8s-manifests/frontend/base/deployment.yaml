@@ -42,3 +42,31 @@ spec:
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 5
+        - name: node-exporter
+          image: prom/node-exporter:v1.8.2
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --collector.processes
+            - --web.listen-address=:9100
+          ports:
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys

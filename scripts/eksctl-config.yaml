@@ -13,9 +13,9 @@ cloudWatch:
 managedNodeGroups:
   - name: standard-nodes
     instanceType: t3.medium
-    desiredCapacity: 2
+    desiredCapacity: 3
     minSize: 1
-    maxSize: 2
+    maxSize: 3
     volumeSize: 20
     ssh:
       allow: false

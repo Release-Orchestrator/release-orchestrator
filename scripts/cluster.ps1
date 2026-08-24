@@ -30,12 +30,13 @@ param(
     [string]$Action = "create",
 
     [string]$JwtSecret  = "dev-jwt-secret-change-me",
+    [string]$ProdJwtSecret = "prod-jwt-secret-stronger-please-change",
     [string]$DbPassword = "postgres"
 )
 
 # ---------- configuration ----------
-$ClusterName            = "release-platform"
-$Region                 = "ap-south-1"
+$ClusterName            = "release-orch"
+$Region                 = "ap-south-2"
 $EksctlConfig           = Join-Path $PSScriptRoot "eksctl-config.yaml"
 $RepoRoot               = Split-Path $PSScriptRoot -Parent
 $ArgocdAppsDir          = Join-Path $RepoRoot "argocd-apps"
@@ -44,6 +45,7 @@ $IngressNamespace       = "ingress-nginx"
 $RepoUrl                = "https://github.com/Release-Orchestrator/release-orchestrator"
 $RepoRevision           = "main"
 $ClusterAutoscalerIam   = "arn:aws:iam::aws:policy/AmazonEKSClusterAutoscalerPolicy"
+$EbsCsiPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 
 # Pin chart versions here for reproducibility. Empty string = latest chart.
 $ArgoChartVersion              = ""
@@ -85,6 +87,17 @@ function New-Secret {
     Write-Host "  secret '$Name' ($Namespace) applied"
 }
 
+function New-DockerSecret {
+    param([string]$Name, [string]$Namespace, [string]$Server, [string]$Username, [string]$Password)
+    $yaml = & kubectl create secret docker-registry $Name `
+        --docker-server=$Server --docker-username=$Username --docker-password=$Password `
+        --dry-run=client -o yaml
+    Assert-NativeSuccess
+    $yaml | & kubectl apply -f -
+    Assert-NativeSuccess
+    Write-Host "  docker secret '$Name' ($Namespace) applied"
+}
+
 # ---------- actions ----------
 function Invoke-Create {
     Write-Step "Verifying AWS identity"
@@ -115,6 +128,17 @@ function Invoke-Create {
         --attach-policy-arn $ClusterAutoscalerIam `
         --override-existing-serviceaccounts --approve 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Host "  cluster-autoscaler SA already exists - continuing" }
+
+    Write-Step "Creating IAM service account for EBS CSI driver"
+    & eksctl create iamserviceaccount --cluster $ClusterName --region $Region `
+        --name ebs-csi-driver --namespace kube-system `
+        --attach-policy-arn $EbsCsiPolicy --approve 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Host "  ebs-csi-driver SA already exists - continuing" }
+
+    Write-Step "Installing EBS CSI driver addon"
+    & eksctl create addon --name aws-ebs-csi-driver --cluster $ClusterName --region $Region --force
+    Assert-NativeSuccess
+    & kubectl -n kube-system get pods | Select-String csi
 
     Write-Step "Adding helm repositories"
     & helm repo add autoscaler https://kubernetes.github.io/autoscaler 2>&1 | Out-Null
@@ -161,12 +185,21 @@ function Invoke-Create {
     New-Secret "user-service-secrets" "staging" @{ "database-url" = "postgres://postgres:$DbPassword@user-db:5432/user_db?sslmode=disable" }
     New-Secret "auth-service-secrets" "staging" @{ "jwt-secret" = $JwtSecret; "db-password" = $DbPassword }
     New-Secret "user-service-secrets" "production" @{ "database-url" = "postgres://postgres:$DbPassword@user-db:5432/user_db?sslmode=disable" }
-    New-Secret "auth-service-secrets" "production" @{ "jwt-secret" = $JwtSecret; "db-password" = $DbPassword }
+    New-Secret "auth-service-secrets" "production" @{ "jwt-secret" = $ProdJwtSecret; "db-password" = $DbPassword }
 
-    Write-Step "Applying ArgoCD app-of-apps (project + staging apps)"
+    Write-Step "Creating GHCR pull secret (private images)"
+    $PAT = Read-Host "Enter GHCR PAT (read:packages) for image pull secret"
+    New-DockerSecret "ghcr-secret" "staging" "ghcr.io" "<USER>" $PAT
+    New-DockerSecret "ghcr-secret" "production" "ghcr.io" "<USER>" $PAT
+
+    Write-Step "Applying ArgoCD project + staging apps (auto-sync)"
     & kubectl apply -f (Join-Path $ArgocdAppsDir "project.yaml")
     Assert-NativeSuccess
     & kubectl apply -f (Join-Path $ArgocdAppsDir "staging")
+    Assert-NativeSuccess
+
+    Write-Step "Applying production ArgoCD apps (manual sync = promotion)"
+    & kubectl apply -f (Join-Path $ArgocdAppsDir "production")
     Assert-NativeSuccess
 
     Write-Step "Waiting for ingress LoadBalancer address (up to 5 min)"
@@ -177,30 +210,17 @@ function Invoke-Create {
         Start-Sleep -Seconds 10
     }
 
-    Write-Step "Logging in to ArgoCD and syncing apps"
-    $pf = Start-Process kubectl -ArgumentList @("-n", $ArgocdNamespace, "port-forward", "svc/argocd-server", "8080:443") -PassThru -WindowStyle Hidden
-    try {
-        Start-Sleep -Seconds 8
-        $adminPassword = ""
-        $pwB64 = & kubectl -n $ArgocdNamespace get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>$null
-        if ($pwB64) { $adminPassword = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($pwB64)) }
-        if ($adminPassword) {
-            & argocd login localhost:8080 --insecure --username admin --password $adminPassword
-            Assert-NativeSuccess
-            & argocd app list -o name
-        } else {
-            Write-Host "  could not read admin password - login manually with:"
-            Write-Host "  kubectl -n argocd port-forward svc/argocd-server 8080:443"
-            Write-Host "  kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
-        }
-    } finally {
-        Stop-Process -Id $pf.Id -Force -ErrorAction SilentlyContinue
+    Write-Step "Syncing production apps (manual promotion = approval step)"
+    @("postgres-production","user-service-production","auth-service-production",
+      "order-service-production","payment-service-production",
+      "api-gateway-production","frontend-production") | ForEach-Object {
+        & argocd app sync $_ --async
     }
 
     Write-Step "Summary"
-    if ($lb) { Write-Host "  LB URL     : http://$lb" } else { Write-Host "  LB URL     : (still provisioning - check: kubectl -n $IngressNamespace get svc ingress-nginx-controller)" }
-    Write-Host "  Frontend   : http://$lb/"
-    Write-Host "  API        : http://$lb/api"
+    if ($lb) { Write-Host "  LB hostname : $lb" } else { Write-Host "  LB hostname : (still provisioning - check: kubectl -n $IngressNamespace get svc ingress-nginx-controller)" }
+    Write-Host "  Production : http://$lb/        (catch-all, default host)"
+    Write-Host "  Staging    : http://staging.local/  (add to hosts file: <LB-IP> staging.local)"
     Write-Host "  ArgoCD UI  : kubectl -n argocd port-forward svc/argocd-server 8080:443  ->  https://localhost:8080"
     Write-Host "  ArgoCD user: admin"
     Write-Host "  Next sync  : argocd app list / argocd app sync <name>"
@@ -215,6 +235,13 @@ function Invoke-Destroy {
     }
     $ans = Read-Host "Destroy cluster '$ClusterName'? This deletes ALL data, secrets and the ingress LB DNS. Type 'yes' to confirm"
     if ($ans -ne "yes") { Write-Host "  aborted"; return }
+
+    Write-Step "Deleting ArgoCD apps and namespaces (frees PVCs/EBS)"
+    & kubectl delete -f (Join-Path $ArgocdAppsDir "staging")
+    & kubectl delete -f (Join-Path $ArgocdAppsDir "production")
+    & kubectl delete ns staging production
+
+    Write-Step "Deleting cluster"
     & eksctl delete cluster -f $EksctlConfig
     Assert-NativeSuccess
     Write-Host "  cluster '$ClusterName' deleted"

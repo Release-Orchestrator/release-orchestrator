@@ -1,0 +1,35 @@
+controller:
+  replicas: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  logLevel: info
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+  webhook:
+    enabled: true
+    port: 8443
+  leaderElection:
+    enabled: true
+  image:
+    registry: quay.io
+    repository: argoproj/argo-rollouts
+    tag: v1.10.2
+  featureGates:
+    - "CanaryStableRS=true"
+    - "Rollback=true"
+    - "ExperimentalMetrics=true"
+
+dashboard:
+  enabled: false
+
+crds:
+  install: true
+  keep: true

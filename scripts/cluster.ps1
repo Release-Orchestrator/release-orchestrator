@@ -144,6 +144,7 @@ function Invoke-Create {
     & helm repo add autoscaler https://kubernetes.github.io/autoscaler 2>&1 | Out-Null
     & helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>&1 | Out-Null
     & helm repo add argocd https://argoproj.github.io/argo-helm 2>&1 | Out-Null
+    & helm repo add argo https://argoproj.github.io/argo-helm 2>&1 | Out-Null
     & helm repo update 2>&1 | Out-Null
 
     Write-Step "Installing cluster-autoscaler (enables node autoscaling min 1 / max 2)"
@@ -179,6 +180,10 @@ function Invoke-Create {
     & kubectl -n $ArgocdNamespace rollout status deployment/argocd-repo-server --timeout=300s
     Assert-NativeSuccess
     & kubectl -n $ArgocdNamespace rollout status deployment/argocd-application-controller --timeout=300s
+    Assert-NativeSuccess
+
+    Write-Step "Bootstrapping Argo Rollouts controller via ArcoCD (GitOps)"
+    & (Join-Path $PSScriptRoot "bootstrap-argocd.ps1")
     Assert-NativeSuccess
 
     Write-Step "Installing kube-prometheus-stack (Prometheus + Grafana + Alertmanager)"
@@ -261,7 +266,8 @@ function Invoke-Destroy {
     Write-Step "Deleting ArgoCD apps and namespaces (frees PVCs/EBS)"
     & kubectl delete -f (Join-Path $ArgocdAppsDir "staging")
     & kubectl delete -f (Join-Path $ArgocdAppsDir "production")
-    & kubectl delete ns staging production
+    & kubectl delete -f (Join-Path $ArgocdAppsDir "bootstrap")
+    & kubectl delete ns staging production argo-rollouts
 
     Write-Step "Deleting cluster"
     & eksctl delete cluster -f $EksctlConfig

@@ -12,8 +12,20 @@ spec:
       server: https://kubernetes.default.svc
     - namespace: production
       server: https://kubernetes.default.svc
+    - namespace: argo-rollouts
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
     - group: storage.k8s.io
       kind: StorageClass
+    - group: argoproj.io
+      kind: Rollout
+    - group: argoproj.io
+      kind: AnalysisTemplate
+    - group: argoproj.io
+      kind: AnalysisRun
+    - group: argoproj.io
+      kind: Experiment

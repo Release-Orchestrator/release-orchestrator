@@ -3,11 +3,12 @@ kind: Kustomization
 resources:
   - ../../base
   - servicemonitor.yaml
+  - ingress.yaml
 patches:
   - patch: |-
       - op: replace
         path: /spec/replicas
-        value: 1
+        value: 3
     target:
       kind: Deployment
       name: user-service

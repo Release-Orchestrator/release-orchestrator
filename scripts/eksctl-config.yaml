@@ -4,11 +4,20 @@ kind: ClusterConfig
 metadata:
   name: release-orch
   region: ap-south-2
-  version: "1.33"
+  version: "1.31"
+
+iam:
+  withOIDC: true
 
 cloudWatch:
   clusterLogging:
     enableTypes: ["api", "audit", "authenticator"]
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
 
 managedNodeGroups:
   - name: standard-nodes

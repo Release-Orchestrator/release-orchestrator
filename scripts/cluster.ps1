@@ -189,14 +189,7 @@ function Invoke-Create {
     Write-Step "Installing kube-prometheus-stack (Prometheus + Grafana + Alertmanager)"
     $monArgs = @("upgrade", "--install", "monitoring", "prometheus-community/kube-prometheus-stack",
         "--namespace", "monitoring", "--create-namespace",
-        "--set", "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false",
-        "--set", "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false",
-        "--set", "grafana.enabled=true",
-        "--set", "alertmanager.enabled=true",
-        "--set", "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName=gp3",
-        "--set", "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi",
-        "--set", "grafana.sidecar.dashboards.enabled=true",
-        "--set", "grafana.sidecar.dashboards.label=grafana_dashboard")
+        "--values", (Join-Path $PSScriptRoot "monitoring-values.yaml"))
     & helm @monArgs
     Assert-NativeSuccess
 

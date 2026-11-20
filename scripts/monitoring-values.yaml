@@ -1,0 +1,23 @@
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: "ReleaseOrch2024!"
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          resources:
+            requests:
+              storage: 50Gi
+
+alertmanager:
+  enabled: true

@@ -145,6 +145,7 @@ function Invoke-Create {
     & helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>&1 | Out-Null
     & helm repo add argocd https://argoproj.github.io/argo-helm 2>&1 | Out-Null
     & helm repo add argo https://argoproj.github.io/argo-helm 2>&1 | Out-Null
+    & helm repo add grafana https://grafana.github.io/helm-charts 2>&1 | Out-Null
     & helm repo update 2>&1 | Out-Null
 
     Write-Step "Installing cluster-autoscaler (enables node autoscaling min 1 / max 2)"
@@ -191,6 +192,13 @@ function Invoke-Create {
         "--namespace", "monitoring", "--create-namespace",
         "--values", (Join-Path $PSScriptRoot "monitoring-values.yaml"))
     & helm @monArgs
+    Assert-NativeSuccess
+
+    Write-Step "Installing Loki stack (Log aggregation)"
+    $lokiArgs = @("upgrade", "--install", "loki", "grafana/loki-stack",
+        "--namespace", "monitoring",
+        "--values", (Join-Path $PSScriptRoot "loki-values.yaml"))
+    & helm @lokiArgs
     Assert-NativeSuccess
 
     Write-Step "Waiting for ArgoCD to be ready"

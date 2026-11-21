@@ -252,6 +252,12 @@ function Invoke-Create {
     Write-Host "  ArgoCD UI  : kubectl -n argocd port-forward svc/argocd-server 8080:443  ->  https://localhost:8080"
     Write-Host "  ArgoCD user: admin"
     Write-Host "  Next sync  : argocd app list / argocd app sync <name>"
+    Write-Host ""
+    Write-Host "  CANARY DEPLOYMENT (user-service):"
+    Write-Host "    Trigger: kubectl argo rollouts set image user-service user-service=ghcr.io/release-orchestrator/user-service:<TAG> -n production"
+    Write-Host "    Watch:   kubectl argo rollouts get rollout user-service -n production --watch"
+    Write-Host "    Analysis: kubectl -n production get analysisrun"
+    Write-Host "    Abort:   kubectl argo rollouts abort user-service -n production"
 }
 
 function Invoke-Destroy {

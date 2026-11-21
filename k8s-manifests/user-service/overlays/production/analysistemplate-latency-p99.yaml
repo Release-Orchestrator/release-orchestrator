@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: latency-p99
+  namespace: production
+spec:
+  args:
+    - name: service-name
+    - name: namespace
+  metrics:
+    - name: latency-p99
+      interval: 30s
+      count: 5
+      successCondition: result[0] <= 0.2
+      provider:
+        prometheus:
+          address: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket{app="{{args.service-name}}",namespace="{{args.namespace}}"}[2m])) by (le)
+            )

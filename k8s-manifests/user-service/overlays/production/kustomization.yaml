@@ -4,11 +4,8 @@ resources:
   - ../../base
   - servicemonitor.yaml
   - ingress.yaml
-patches:
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 3
-    target:
-      kind: Deployment
-      name: user-service
+  - analysistemplate-success-rate.yaml
+  - analysistemplate-latency-p99.yaml
+  - rollout.yaml
+  - canary-service.yaml
+  - stable-service.yaml

@@ -1,0 +1,94 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  replicas: 3
+  strategy:
+    canary:
+      canaryMetadata:
+        labels:
+          rollout: canary
+      stableMetadata:
+        labels:
+          rollout: stable
+      steps:
+        - setWeight: 10
+        - pause: {duration: 30s}
+        - analysis:
+            templates:
+              - templateName: success-rate
+                args:
+                  - name: service-name
+                    value: user-service
+                  - name: namespace
+                    value: production
+              - templateName: latency-p99
+                args:
+                  - name: service-name
+                    value: user-service
+                  - name: namespace
+                    value: production
+        - setWeight: 30
+        - pause: {duration: 60s}
+        - analysis:
+            templates:
+              - templateName: success-rate
+                args:
+                  - name: service-name
+                    value: user-service
+                  - name: namespace
+                    value: production
+              - templateName: latency-p99
+                args:
+                  - name: service-name
+                    value: user-service
+                  - name: namespace
+                    value: production
+        - setWeight: 50
+        - pause: {duration: 60s}
+        - setWeight: 100
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: user-service
+          image: ghcr.io/release-orchestrator/user-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DB_HOST
+              value: "user-db"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "postgres"
+            - name: DB_PASS
+              value: "postgres"
+            - name: DB_NAME
+              value: "user_db"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5

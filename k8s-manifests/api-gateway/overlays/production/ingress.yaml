@@ -2,8 +2,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-gateway
-  labels:
-    app: api-gateway
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "0"
 spec:
   ingressClassName: nginx
   rules:
@@ -13,6 +16,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: api-gateway
+                name: api-gateway-stable
                 port:
                   number: 80

@@ -1,0 +1,128 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  replicas: 3
+  strategy:
+    canary:
+      canaryMetadata:
+        labels:
+          rollout: canary
+      stableMetadata:
+        labels:
+          rollout: stable
+      steps:
+        - setWeight: 10
+        - pause: {duration: 30s}
+        - analysis:
+            templates:
+              - templateName: success-rate
+                args:
+                  - name: service-name
+                    value: frontend
+                  - name: namespace
+                    value: production
+              - templateName: latency-p99
+                args:
+                  - name: service-name
+                    value: frontend
+                  - name: namespace
+                    value: production
+              - templateName: error-rate
+                args:
+                  - name: service-name
+                    value: frontend
+                  - name: namespace
+                    value: production
+        - setWeight: 30
+        - pause: {duration: 60s}
+        - analysis:
+            templates:
+              - templateName: success-rate
+                args:
+                  - name: service-name
+                    value: frontend
+                  - name: namespace
+                    value: production
+              - templateName: latency-p99
+                args:
+                  - name: service-name
+                    value: frontend
+                  - name: namespace
+                    value: production
+              - templateName: error-rate
+                args:
+                  - name: service-name
+                    value: frontend
+                  - name: namespace
+                    value: production
+        - setWeight: 50
+        - pause: {duration: 60s}
+        - setWeight: 100
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: frontend
+          image: ghcr.io/release-orchestrator/frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          env:
+            - name: API_GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: frontend-config
+                  key: API_GATEWAY_URL
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+        - name: node-exporter
+          image: prom/node-exporter:v1.8.2
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --collector.processes
+            - --web.listen-address=:9100
+          ports:
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys

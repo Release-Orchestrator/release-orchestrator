@@ -3,11 +3,8 @@ kind: Kustomization
 resources:
   - ../../base
   - servicemonitor.yaml
-patches:
-  - patch: |-
-      - op: replace
-        path: /spec/replicas
-        value: 1
-    target:
-      kind: Deployment
-      name: payment-service
+  - ingress.yaml
+  - ../../../common/overlays/production
+  - rollout.yaml
+  - canary-service.yaml
+  - stable-service.yaml
